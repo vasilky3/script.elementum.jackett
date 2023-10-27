@@ -4,11 +4,10 @@ import concurrent.futures
 import http.client as httplib
 import os
 import re
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ElT
 from urllib.parse import urljoin
 from xml.etree import ElementTree
 
-from kodi_six import xbmcgui
 from requests_toolbelt import sessions
 
 import torrent
@@ -37,9 +36,8 @@ class Jackett(object):
         }
     }
 
-    def __init__(self, host, api_key, p_dialog: xbmcgui.DialogProgressBG = None):
+    def __init__(self, host, api_key):
         super(Jackett, self).__init__()
-        self.p_dialog = p_dialog
         self._api_key = api_key
         self._caps = {}
 
@@ -47,7 +45,7 @@ class Jackett(object):
         self.get_caps()
 
     def get_error(self, content):
-        xml = ET.ElementTree(ET.fromstring(content)).getroot()
+        xml = ElT.ElementTree(ElT.fromstring(content)).getroot()
         if xml.tag == "error":
             return xml.attrib
 
@@ -71,7 +69,7 @@ class Jackett(object):
 
         set_setting('settings_validated', 'Success')
 
-        xml = ET.ElementTree(ET.fromstring(caps_resp.content)).getroot()
+        xml = ElT.ElementTree(ElT.fromstring(caps_resp.content)).getroot()
 
         # todo handle gracefully, doesn't exist for individual trackers
         # self._caps["limits"] = xml.find("limits").attrib
@@ -194,20 +192,12 @@ class Jackett(object):
         return self._do_search_request(request_params)
 
     def _get_with_progress(self, *args, **kwargs):
-        if not self.p_dialog:
-            r = self._session.get(*args, **kwargs)
-            return r, r.content
-
-        prog_from, prog_to = 0, 25
-        self._update_progress(prog_from, prog_to, 0, 100)
-
         r = self._session.get(stream=True, *args, **kwargs)
         total_size = int(r.headers.get('content-length', 0))
         search_resp = b""
         for chunk in r.iter_content(64 * 1024):
             if chunk:
                 search_resp += chunk
-                self._update_progress(prog_from, prog_to, len(search_resp), total_size)
 
         return r, search_resp
 
@@ -242,7 +232,7 @@ class Jackett(object):
 
     def _parse_items(self, resp_content):
         results = []
-        xml = ET.ElementTree(ET.fromstring(resp_content))
+        xml = ElT.ElementTree(ElT.fromstring(resp_content))
         items = xml.getroot().findall("channel/item")
         log.info(f"Found {len(items)} items from response")
         for item in items:
@@ -256,17 +246,16 @@ class Jackett(object):
     #  todo for some reason Elementum cannot resolve the link that gets proxied through Jackett.
     #  So we will resolve it manually for Elementum for now.
     #  In actuality, this should be fixed within Elementum
-    def async_magnet_resolve(self, results):
+    def async_magnet_resolve(self, results, update_pg):
         size = len(results)
-        prog_from, prog_to = 25, 90
-        self.p_dialog.update(prog_from, message=translation(32751).format(size))
+        update_pg(message=translation(32751).format(0, size))
 
         failed, count = 0, 0
         with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() * 10) as executor:
             future_to_magnet = {executor.submit(torrent.get_magnet, res["uri"]): res for res in results}
             for future in concurrent.futures.as_completed(future_to_magnet):
                 count += 1
-                self._update_progress(prog_from, prog_to, count, size)
+                update_pg(count, size, message=translation(32751).format(count, size))
                 res = future_to_magnet[future]
                 try:
                     magnet = future.result()
@@ -283,12 +272,6 @@ class Jackett(object):
 
         log.warning(f"Failed to resolve {failed} magnet links")
         return results
-
-    def _update_progress(self, pfrom, pto, current, total):
-        if not self.p_dialog:
-            return
-
-        self.p_dialog.update(int((pfrom + (pto - pfrom) * (current / total)) // 1))
 
     def _parse_item(self, item):
         result = {

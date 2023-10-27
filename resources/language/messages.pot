@@ -336,7 +336,7 @@ msgid "Filtering result..."
 msgstr ""
 
 msgctxt "#32751"
-msgid "Resolving {} magnet links..."
+msgid "Resolved {}/{} magnet links..."
 msgstr ""
 
 msgctxt "#32752"

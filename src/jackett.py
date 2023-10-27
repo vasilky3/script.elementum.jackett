@@ -16,12 +16,13 @@ import utils
 from client import Jackett
 from logger import log
 from utils import get_setting
+from pdialoghelper import PDialog
 
 available_providers = 0
 special_chars = "()\"':.[]<>/\\?"
 
 
-def get_client(p_dialog: xbmcgui.DialogProgressBG = None):
+def get_client():
     host = urlparse(get_setting('host'))
     if host.netloc == '' or host.scheme == '':
         log.warning(f"Host {get_setting('host')} is invalid. Can't return anything")
@@ -37,7 +38,7 @@ def get_client(p_dialog: xbmcgui.DialogProgressBG = None):
         log.debug(f"jackett host: {host}")
         log.debug(f"jackett api_key: {api_key[0:2]}{'*' * 26}{api_key[-4:]}")
 
-    return Jackett(host=host.geturl(), api_key=api_key, p_dialog=p_dialog)
+    return Jackett(host=host.geturl(), api_key=api_key)
 
 
 def validate_client():
@@ -58,12 +59,10 @@ def search(payload, method="general"):
     payload = parse_payload(method, payload)
 
     log.debug(f"Searching with payload ({method}): f{payload}")
-
-    p_dialog = xbmcgui.DialogProgressBG()
-    p_dialog.create('Elementum [COLOR FFFF6B00]Jackett[/COLOR]', utils.translation(32602))
     results = []
-
     try:
+        p_dialog = PDialog(utils.translation(32602))
+
         request_start_time = time.time()
         results = search_jackett(p_dialog, payload, method)
         request_end_time = time.time()
@@ -179,13 +178,13 @@ def sort_results(results):
 
 
 def search_jackett(p_dialog, payload, method):
-    jackett = get_client(p_dialog)
+    jackett = get_client()
     if jackett is None:
         utils.notify(utils.translation(32603), image=utils.get_icon_path())
         return []
 
     log.debug(f"Processing {method} with Jackett")
-    p_dialog.update(message=utils.translation(32604))
+    p_dialog.update(25, message=utils.translation(32604))
     if method == 'movie':
         res = jackett.search_movie(payload["search_title"], payload['year'], payload["imdb_id"])
     elif method == 'season':
@@ -210,7 +209,7 @@ def search_jackett(p_dialog, payload, method):
                          payload.get('episode', None), payload.get('absolute_number', None), payload.get('year', None),
                          payload.get('season_year', None), payload.get('show_year', None))
 
-    res = jackett.async_magnet_resolve(res)
+    res = jackett.async_magnet_resolve(res, p_dialog.callback(90))
 
     p_dialog.update(90, message=utils.translation(32752))
     res = filter.unique(res)
