@@ -2,6 +2,7 @@
 import hashlib
 import os
 import re
+import itertools
 from collections import OrderedDict
 
 from kodi_six import xbmcgui
@@ -19,9 +20,9 @@ resolutions = OrderedDict([
     ('4k', [r'4k', r'2160[p]', r'uhd', r'4k', r'hd4k']),
     ('2k', [r'1440[p]', r'2k']),
     ('1080p', [r'1080[ip]', r'1920x1080', r'hd1080p?', r'fullhd', r'fhd', r'blu\W*ray', r'bd\W*remux']),
-    ('720p', [r'720[p]', r'1280x720', r'hd720p?', r'hd\-?rip', r'b[rd]rip']),
-    ('480p', [r'480[p]', r'xvid', r'dvd', r'dvdrip', r'hdtv', r'web\-(dl)?rip', r'iptv', r'sat\-?rip',
-              r'tv\-?rip']),
+    ('720p', [r'720[p]', r'1280x720', r'hd720p?', r'hd\-?rip', r'b[rd]rip', r'dvdrip', r'hdtv', r'iptv',
+              r'web\-(dl)?rip', r'dvd']),
+    ('480p', [r'480[p]', r'xvid', r'sat\-?rip', r'tv\-?rip']),
     ('240p', [r'240[p]', r'vhs\-?rip']),
     (UNKNOWN, []),
 ])
@@ -124,3 +125,8 @@ def check_season_name(title, season_name=""):
     if season_name in title or "season" in season_name:
         return ""
     return season_name
+
+
+def concat_list(li):
+    """ converts [[a],[b,c]] to [a, b, c] """
+    return list(itertools.chain.from_iterable(li))

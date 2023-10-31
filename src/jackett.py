@@ -8,12 +8,14 @@ import traceback
 from urllib.parse import urlparse
 
 import time
+import asyncio
 from kodi_six import xbmc, xbmcgui
 
 import addon
 import filter
 import utils
-from client import Jackett
+import torrent
+from asyncjackettclient import JackettClient
 from logger import log
 from utils import get_setting
 from pdialoghelper import PDialog
@@ -22,7 +24,7 @@ available_providers = 0
 special_chars = "()\"':.[]<>/\\?"
 
 
-def get_client():
+async def get_client():
     host = urlparse(get_setting('host'))
     if host.netloc == '' or host.scheme == '':
         log.warning(f"Host {get_setting('host')} is invalid. Can't return anything")
@@ -37,8 +39,9 @@ def get_client():
     else:
         log.debug(f"jackett host: {host}")
         log.debug(f"jackett api_key: {api_key[0:2]}{'*' * 26}{api_key[-4:]}")
-
-    return Jackett(host=host.geturl(), api_key=api_key)
+    cli = JackettClient(host=host.geturl(), api_key=api_key)
+    await cli.create_session()
+    return cli
 
 
 def validate_client():
@@ -64,7 +67,7 @@ def search(payload, method="general"):
         p_dialog = PDialog(utils.translation(32602))
 
         request_start_time = time.time()
-        results = search_jackett(p_dialog, payload, method)
+        results = asyncio.run(search_jackett(p_dialog, payload, method))
         request_end_time = time.time()
         request_time = round(request_end_time - request_start_time, 2)
 
@@ -177,46 +180,40 @@ def sort_results(results):
     return sorted_results
 
 
-def search_jackett(p_dialog, payload, method):
-    jackett = get_client()
-    if jackett is None:
+async def search_jackett(p_dialog, payload, method):
+    j_cli = await get_client()
+    if j_cli is None:
         utils.notify(utils.translation(32603), image=utils.get_icon_path())
         return []
 
     log.debug(f"Processing {method} with Jackett")
     p_dialog.update(25, message=utils.translation(32604))
+    query_weight = 50
     if method == 'movie':
-        res = jackett.search_movie(payload["search_title"], payload['year'], payload["imdb_id"])
-    elif method == 'season':
-        res = jackett.search_season(payload["search_title"], payload["season"], payload["imdb_id"])
-    elif method == 'episode':
+        res = await j_cli.search_movie(payload["search_title"], payload['year'], imdb_id=payload["imdb_id"],
+                                       p_dialog_cb=p_dialog.callback(query_weight))
+    elif method in ('season', 'episode', 'anime'):
         if get_setting("use_smart_show_filter", bool):
-            res = jackett.search_title(payload["search_title"], payload["imdb_id"])
+            res = await j_cli.search_tv(payload["search_title"], imdb_id=payload["imdb_id"],
+                                        p_dialog_cb=p_dialog.callback(query_weight))
         else:
-            res = jackett.search_episode(payload["search_title"], payload["season"], payload["episode"],
-                                         payload["imdb_id"])
-    elif method == 'anime':
-        log.warn("jackett provider does not yet support anime search")
-        res = []
-        log.info(f"anime payload={payload}")
-    #     client.search_query(payload["search_title"], payload["season"], payload["episode"], payload["imdb_id"])
+            res = await j_cli.search_tv(payload["search_title"], season=payload.get("season", None),
+                                        ep=payload.get("episode", None), imdb_id=payload["imdb_id"],
+                                        p_dialog_cb=p_dialog.callback(query_weight))
     else:
-        res = jackett.search_query(payload["search_title"])
+        res = j_cli.search_query(payload["search_title"], p_dialog_cb=p_dialog.callback(query_weight))
 
-    log.debug(f"{method} search returned {len(res)} results")
-    p_dialog.update(25, message=utils.translation(32750))
+    log.debug(f"Filtering {len(res)} torrents")
+    p_dialog.update(50, utils.translation(32602), message=utils.translation(32750))
     res = filter_results(method, res, payload.get('season', None), payload.get('season_name', ""),
                          payload.get('episode', None), payload.get('absolute_number', None), payload.get('year', None),
                          payload.get('season_year', None), payload.get('show_year', None))
 
-    res = jackett.async_magnet_resolve(res, p_dialog.callback(90))
+    log.info(f"Resolving unique magnets {len(res)}")
+    res = await torrent.uri_to_magnets_uniq_torrents(res, p_dialog.callback(98))
+    log.debug(f"Resolving unique magnets results: {res}")
 
-    p_dialog.update(90, message=utils.translation(32752))
-    res = filter.unique(res)
-    log.info(f"filtering for unique items {len(res)}")
-    log.debug(f"unique items results: {res}")
-
-    p_dialog.update(95, message=utils.translation(32753))
+    p_dialog.update(98, message=utils.translation(32753))
     res = sort_results(res)
 
     p_dialog.update(100, message=utils.translation(32754))
