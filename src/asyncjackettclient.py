@@ -1,18 +1,13 @@
 #!/usr/bin/env python3.6
 # coding=utf-8
-import concurrent.futures
 from enum import Enum, Flag, auto
 import time
 import aiohttp
 import asyncio
 from http import HTTPStatus
-import os
 import xml.etree.ElementTree as ElT
 from xml.etree import ElementTree
 
-from requests_toolbelt import sessions
-
-import torrent
 import utils
 from logger import log
 from utils import notify, translation, get_icon_path, human_size, get_resolution, get_release_type, get_setting, \
