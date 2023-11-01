@@ -28,11 +28,11 @@ class PDialog:
         self.to_pg = 100 if 0 > to_pg > 100 else to_pg
         return self.update_progress
 
-    def update(self, percent=None, heading=None, message=None):
+    def update(self, percent=None, heading=default_heading, message=None):
         self.curr_pg = percent if percent is not None else self.curr_pg
-        self.pd.update(percent, heading, message)
+        self.pd.update(self.curr_pg, heading, message)
 
-    def update_progress(self, curr_step=0, total_steps=100, heading: str = None, message: str = None):
+    def update_progress(self, curr_step=0, total_steps=100, heading: str = default_heading, message: str = None):
         self.curr_pg = int((self.start_pg + (self.to_pg - self.start_pg) * (curr_step / total_steps)) // 1)
         self.pd.update(self.curr_pg, heading, message)
 

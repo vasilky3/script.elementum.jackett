@@ -4,6 +4,7 @@ from enum import Enum, Flag, auto
 import time
 import aiohttp
 import asyncio
+from pdialoghelper import PDialog
 from http import HTTPStatus
 import xml.etree.ElementTree as ElT
 from xml.etree import ElementTree
@@ -41,7 +42,6 @@ flags_mapping = {
 
 
 def pars_cap(atr_arr):
-    print(atr_arr)
     r = Cap(0)
     for atr in atr_arr:
         r |= flags_mapping.get(atr, Cap(0))
@@ -85,22 +85,20 @@ class JackettClient:
         self.session = None
 
     async def send_request(self, url, params=None):
-        log.info(f"Sending to Jackett\nurl: {url} \nparams: {params}")
-        print(f"Sending to Jackett\nurl: {url} \nparams: {params}")
+        log.info(f"Sending to Jackett url: {url} params: {params}")
         if params is None:
             params = {}
         params['apikey'] = self.api_key
         start = time.monotonic()
         async with self.session.get(url, params=params) as resp:
-            log.info(f"Indexers request status: {resp.status}")
+            log.debug(f"Indexers request status: {resp.status}")
             if resp.status != HTTPStatus.OK:
                 self.proceed_resp_error(resp.status, resp.message)
                 return
             response_time = time.monotonic() - start
             body = await resp.text()
 
-        print(f"resp in {response_time:.3f} size {len(body)}")
-        log.info(f"Jackett returned response in {response_time:.3f}s size {len(body)}b")
+        log.info(f"Jackett returned response in {response_time:.3f}s size {len(body)} b")
         log.debug("===============================")
         log.debug(body)
         log.debug("===============================")
@@ -131,7 +129,9 @@ class JackettClient:
             params["q"] = title
             params["year"] = year
         else:
-            params["q"] = f"{title} {year}"
+            params["q"] = f"{title}"
+            if year:
+                params["q"] += f" {year}"
 
         if bool(season) and (cap & Cap.SEASON):
             params["season"] = season
@@ -147,14 +147,13 @@ class JackettClient:
         if not root:
             return
         torr_list = parse_torrents(root)
-        log.info(f"Done searching {indexer.name} with params {params}. Got {len(torr_list)} torrents.")
-        print(f"Done searching {indexer.name} with params {params}. Got {len(torr_list)} torrents.")
+        log.info(f"Done searching. Got {len(torr_list)} torrents from {indexer.name}.")
         return torr_list, indexer
 
     async def await_indexers(self, tasks, pd_cb):
         def update_p_dialog():
             if pd_cb:
-                pd_cb(count, total, f"{utils.translation(32602)} {count}/{total} indexers done",
+                pd_cb(count, total, f"{PDialog.default_heading}... {count}/{total} indexers done",
                       f"waiting: {', '.join(set(await_ind_names))}")
         result = []
         total = len(tasks)
@@ -164,7 +163,6 @@ class JackettClient:
         for task in asyncio.as_completed(tasks):
             torrents, indexer = await task
             count += 1
-            print(await_ind_names)
             await_ind_names.remove(indexer.name)
             update_p_dialog()
             result.append(torrents)
@@ -192,7 +190,8 @@ class JackettClient:
         self.session = aiohttp.ClientSession(host or self.host)
 
     async def close_session(self):
-        await self.session.close()
+        if not self.session.closed:
+            await self.session.close()
 
     @staticmethod
     def proceed_resp_error(code, description):
@@ -205,10 +204,9 @@ class JackettClient:
 def parse_torrents(root):
     results = []
     items = root.findall("channel/item")
-    log.info(f"Found {len(items)} items from response")
     for item in items:
         result = parse_item(item)
-        if result is not None: #and filter_torrent(result): optimize?
+        if result is not None:
             results.append(result)
     return results
 

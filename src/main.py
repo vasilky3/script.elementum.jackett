@@ -9,6 +9,7 @@ from logger import log
 
 sys.path.insert(0, path.realpath(path.join(path.dirname(__file__), '..', 'resources', 'libs')))
 sys.path.insert(0, path.dirname(__file__))
+sys.modules['_asyncio'] = None
 
 if __name__ == '__main__':
     import debugger

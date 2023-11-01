@@ -20,11 +20,17 @@ from logger import log
 from utils import get_setting
 from pdialoghelper import PDialog
 
+import sys
+
+if sys.platform == "win32" and (3, 8, 0) <= sys.version_info < (3, 9, 0):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 available_providers = 0
 special_chars = "()\"':.[]<>/\\?"
 
 
 async def get_client():
+    log.debug(f"33333333")
     host = urlparse(get_setting('host'))
     if host.netloc == '' or host.scheme == '':
         log.warning(f"Host {get_setting('host')} is invalid. Can't return anything")
@@ -41,6 +47,7 @@ async def get_client():
         log.debug(f"jackett api_key: {api_key[0:2]}{'*' * 26}{api_key[-4:]}")
     cli = JackettClient(host=host.geturl(), api_key=api_key)
     await cli.create_session()
+    await cli.request_indexers()
     return cli
 
 
@@ -63,17 +70,17 @@ def search(payload, method="general"):
 
     log.debug(f"Searching with payload ({method}): f{payload}")
     results = []
+    p_dialog = PDialog(utils.translation(32602))
     try:
-        p_dialog = PDialog(utils.translation(32602))
-
         request_start_time = time.time()
+        log.debug(f"1111")
         results = asyncio.run(search_jackett(p_dialog, payload, method))
         request_end_time = time.time()
         request_time = round(request_end_time - request_start_time, 2)
 
         log.debug(f"All results: {results}")
 
-        log.info(f"Jackett returned {len(results)} results in {request_time} seconds")
+        log.info(f"{len(results)} torrents returned from Jackett in {request_time} seconds")
     except Exception:
         utils.notify(utils.translation(32703))
         log.error(f"Got exception: {traceback.format_exc()}")
@@ -123,32 +130,32 @@ def filter_results(method, results, season, season_name, episode, global_ep, ep_
     log.debug(f"results before filtered: {results}")
 
     if get_setting('filter_keywords_enabled', bool):
-        log.info(f"filtering keywords {len(results)}")
+        log.info(f"{len(results)} ... filtering keywords ")
         results = filter.keywords(results)
         log.debug(f"filtering keywords results: {results}")
 
     if get_setting('filter_size_enabled', bool):
-        log.info(f"filtering size {len(results)}")
+        log.info(f"{len(results)} ... filtering size")
         results = filter.size(method, results)
         log.debug(f"filtering size results: {results}")
 
     if get_setting('filter_include_resolution_enabled', bool):
-        log.info(f"filtering resolution {len(results)}")
+        log.info(f"{len(results)} ... filtering resolution")
         results = filter.resolution(results)
         log.debug(f"filtering resolution results: {results}")
 
     if get_setting('filter_include_release', bool):
-        log.info(f"filtering release type {len(results)}")
+        log.info(f"{len(results)} ... filtering release type")
         results = filter.release_type(results)
         log.debug(f"filtering release type results: {results}")
 
     if get_setting('filter_exclude_no_seed', bool):
-        log.info(f"filtering no seeds {len(results)}")
+        log.info(f"{len(results)} ... filtering no seeds")
         results = filter.seed(results)
         log.debug(f"filtering no seeds results: {results}")
 
     if method == "episode" and get_setting("use_smart_show_filter", bool):
-        log.info(f"smart-filtering show torrents {len(results)}")
+        log.info(f"{len(results)} ... smart-filtering show torrents")
         results = filter.tv_season_episode(results, season, season_name, episode, global_ep, ep_year, season_year,
                                            start_year)
         log.debug(f"smart-filtering show torrents results: {results}")
@@ -181,40 +188,44 @@ def sort_results(results):
 
 
 async def search_jackett(p_dialog, payload, method):
+    p_dialog.update(0, message="Getting indexers list")
     j_cli = await get_client()
-    if j_cli is None:
-        utils.notify(utils.translation(32603), image=utils.get_icon_path())
-        return []
+    try:
+        if j_cli is None:
+            utils.notify(utils.translation(32603), image=utils.get_icon_path())
+            return []
 
-    log.debug(f"Processing {method} with Jackett")
-    p_dialog.update(25, message=utils.translation(32604))
-    query_weight = 50
-    if method == 'movie':
-        res = await j_cli.search_movie(payload["search_title"], payload['year'], imdb_id=payload["imdb_id"],
-                                       p_dialog_cb=p_dialog.callback(query_weight))
-    elif method in ('season', 'episode', 'anime'):
-        if get_setting("use_smart_show_filter", bool):
-            res = await j_cli.search_tv(payload["search_title"], imdb_id=payload["imdb_id"],
-                                        p_dialog_cb=p_dialog.callback(query_weight))
+        log.debug(f"Processing {method} with Jackett")
+        p_dialog.update(5, message=utils.translation(32604))
+        query_weight = 50
+        if method == 'movie':
+            res = await j_cli.search_movie(payload["search_title"], payload['year'], imdb_id=payload["imdb_id"],
+                                           p_dialog_cb=p_dialog.callback(query_weight))
+        elif method in ('season', 'episode', 'anime'):
+            if get_setting("use_smart_show_filter", bool):
+                res = await j_cli.search_tv(payload["search_title"], imdb_id=payload["imdb_id"],
+                                            p_dialog_cb=p_dialog.callback(query_weight))
+            else:
+                res = await j_cli.search_tv(payload["search_title"], season=payload.get("season", None),
+                                            ep=payload.get("episode", None), imdb_id=payload["imdb_id"],
+                                            p_dialog_cb=p_dialog.callback(query_weight))
         else:
-            res = await j_cli.search_tv(payload["search_title"], season=payload.get("season", None),
-                                        ep=payload.get("episode", None), imdb_id=payload["imdb_id"],
-                                        p_dialog_cb=p_dialog.callback(query_weight))
-    else:
-        res = j_cli.search_query(payload["search_title"], p_dialog_cb=p_dialog.callback(query_weight))
+            res = j_cli.search_query(payload["search_title"], p_dialog_cb=p_dialog.callback(query_weight))
+    finally:
+        await j_cli.close_session()
 
     log.debug(f"Filtering {len(res)} torrents")
-    p_dialog.update(50, utils.translation(32602), message=utils.translation(32750))
+    p_dialog.update(heading=utils.translation(32602), message=utils.translation(32750))
     res = filter_results(method, res, payload.get('season', None), payload.get('season_name', ""),
                          payload.get('episode', None), payload.get('absolute_number', None), payload.get('year', None),
                          payload.get('season_year', None), payload.get('show_year', None))
 
-    log.info(f"Resolving unique magnets {len(res)}")
-    res = await torrent.uri_to_magnets_uniq_torrents(res, p_dialog.callback(98))
+    log.info(f"{len(res)} ... resolving unique magnets ")
+    res = await torrent.uri_to_magnets_uniq_torrents(res, p_dialog.callback(100))
     log.debug(f"Resolving unique magnets results: {res}")
 
-    p_dialog.update(98, message=utils.translation(32753))
+    p_dialog.update(message=utils.translation(32753))
     res = sort_results(res)
 
-    p_dialog.update(100, message=utils.translation(32754))
+    p_dialog.update(message=utils.translation(32754))
     return res[:get_setting('max_results', int)]
