@@ -20,11 +20,6 @@ from logger import log
 from utils import get_setting
 from pdialoghelper import PDialog
 
-import sys
-# fix asyncio.run() on win
-if sys.platform == "win32" and (3, 8, 0) <= sys.version_info < (3, 9, 0):
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
 available_providers = 0
 special_chars = "()\"':.[]<>/\\?"
 
@@ -50,17 +45,18 @@ async def get_client():
     return cli
 
 
-def validate_client():
-    p_dialog = xbmcgui.DialogProgressBG()
+async def validate_client():
+    cli = await get_client()
     try:
-        p_dialog.create('Elementum [COLOR FFFF6B00]Jackett[/COLOR]', utils.translation(32005))
-        get_client()
         if get_setting("settings_validated") == "Success":
             utils.notify(utils.translation(32006), image=utils.get_icon_path())
+        else:
+            utils.notify(utils.translation(32009), image=utils.get_icon_path())
         addon.ADDON.openSettings()
     finally:
-        p_dialog.close()
-        del p_dialog
+        await cli.close_session()
+        del cli
+
 
 
 def search(payload, method="general"):

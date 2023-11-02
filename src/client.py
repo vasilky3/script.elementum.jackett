@@ -107,6 +107,7 @@ class JackettClient:
         if root.tag == "error":
             self.proceed_resp_error(root.attrib['code'], root.attrib['description'])
             return
+        set_setting('settings_validated', 'Success')
         return root
 
     async def request_indexers(self):

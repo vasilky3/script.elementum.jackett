@@ -54,6 +54,10 @@ msgctxt "#32008"
 msgid "Limit torrent count (Faster)"
 msgstr ""
 
+msgctxt "#32009"
+msgid "Connecting to Jackett failed. Check log for more info"
+msgstr ""
+
 msgctxt "#32050"
 msgid "Filtering"
 msgstr ""
@@ -347,7 +351,7 @@ msgid "Sorting..."
 msgstr ""
 
 msgctxt "#32754"
-msgid "{}... {}/{} indexers done"
+msgid "{}... {}/{} requests done"
 msgstr ""
 
 msgctxt "#32754"
