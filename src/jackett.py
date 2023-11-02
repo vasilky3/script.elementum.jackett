@@ -15,13 +15,13 @@ import addon
 import filter
 import utils
 import torrent
-from asyncjackettclient import JackettClient
+from client import JackettClient
 from logger import log
 from utils import get_setting
 from pdialoghelper import PDialog
 
 import sys
-
+# fix asyncio.run() on win
 if sys.platform == "win32" and (3, 8, 0) <= sys.version_info < (3, 9, 0):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
@@ -30,7 +30,6 @@ special_chars = "()\"':.[]<>/\\?"
 
 
 async def get_client():
-    log.debug(f"33333333")
     host = urlparse(get_setting('host'))
     if host.netloc == '' or host.scheme == '':
         log.warning(f"Host {get_setting('host')} is invalid. Can't return anything")
@@ -73,7 +72,6 @@ def search(payload, method="general"):
     p_dialog = PDialog(utils.translation(32602))
     try:
         request_start_time = time.time()
-        log.debug(f"1111")
         results = asyncio.run(search_jackett(p_dialog, payload, method))
         request_end_time = time.time()
         request_time = round(request_end_time - request_start_time, 2)

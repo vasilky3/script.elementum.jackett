@@ -16,7 +16,7 @@ class XBMCHandler(logging.StreamHandler):
 
     def emit(self, record):
         xbmc_level = self.xbmc_levels.get(record.levelname)
-        #xbmc.log(self.format(record), xbmc_level)
+        xbmc.log(self.format(record), xbmc_level)
 
 
 log = logging.getLogger(addon.ID)

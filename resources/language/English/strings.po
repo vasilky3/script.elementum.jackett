@@ -339,11 +339,15 @@ msgid "Resolved {}/{} magnet links..."
 msgstr ""
 
 msgctxt "#32752"
-msgid "Removing dublicates..."
+msgid "waiting: {}"
 msgstr ""
 
 msgctxt "#32753"
 msgid "Sorting..."
+msgstr ""
+
+msgctxt "#32754"
+msgid "{}... {}/{} indexers done"
 msgstr ""
 
 msgctxt "#32754"

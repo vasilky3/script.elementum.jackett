@@ -6,7 +6,9 @@ import time
 from torf import Torrent, Magnet
 from http import HTTPStatus
 
+import utils
 from logger import log
+
 
 #  if we didn't get a magnet uri, attempt to resolve the magnet uri.
 #  todo for some reason Elementum cannot resolve the link that gets proxied through Jackett.
@@ -18,14 +20,14 @@ async def uri_to_magnets_uniq_torrents(torrents, p_dialog_cb=None):
     hash_set = set()
     async with aiohttp.ClientSession() as session:
         session.headers['User-Agent'] = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.36 ' \
-                                '(KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36'
+                                        '(KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36'
         tasks = [torrent_uri_to_magnet(session, tor) for tor in torrents]
         total = len(tasks)
         for task in asyncio.as_completed(tasks):
             torrent = await task
             count += 1
             if p_dialog_cb:
-                p_dialog_cb(count, total, message=f"{count}/{total} magnets resolved")
+                p_dialog_cb(count, total, message=utils.translation(32751).format(count, total))
             if not torrent['uri']:
                 continue
             m_hash = get_info_hash(torrent['uri'])
