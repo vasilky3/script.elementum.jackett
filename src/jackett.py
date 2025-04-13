@@ -214,7 +214,7 @@ async def search_jackett(p_dialog, payload, method):
                                             ep=payload.get("episode", None), imdb_id=payload["imdb_id"],
                                             p_dialog_cb=p_dialog.callback(query_weight))
         else:
-            res = j_cli.search_query(payload["search_title"], p_dialog_cb=p_dialog.callback(query_weight))
+            res = await j_cli.search_query(payload["search_title"], p_dialog_cb=p_dialog.callback(query_weight))
     finally:
         await j_cli.close_session()
 
